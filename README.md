@@ -1,104 +1,104 @@
 # eBag.bg offers
 
-Feeds ebag.bg promotions into the grocery-deal offer store, alongside the
-Lidl / Billa / Kaufland brochure data.
+Feeds ebag.bg offers into the grocery-deal database, into the same `deals` table
+the Lidl / Billa / Metro / Fantastiko brochures already populate.
 
-## Why it works this way
+    python run.py              # sweep, score, write to deals, email new alerts
+    python run.py --dry-run    # no writes
+    python run.py --cached     # reuse data/catalogue.jsonl.gz, for tuning rules
 
-ebag.bg renders entirely client-side, so fetching the search page returns an
-empty shell. The catalogue behind it is **Algolia** (app `JMJMDQ9HHX`, index
-`products`, ~22 500 products); the public search key is read from the site's own
-JS bundle, which is what the browser does too.
+Configuration is all environment: `DATABASE_URL` (falls back to a local `.env`),
+and `SMTP_USER` / `SMTP_PASSWORD` / `ALERT_TO` for mail.
 
-**We do not keyword-search at collection time.** Algolia is typo-tolerant and
-relevance-ranked, so a query for `олио` returns tanning oil, hair serum and
-stretch-mark cream above the cooking oil. Instead the collector takes the entire
-`is_promo:true` set — about 1 700 rows — and all filtering happens locally
-against stored data. Full recall, and adding a search criterion never means
-re-scraping.
+## What the site actually exposes
 
-Algolia caps paging at 1 000 hits and refuses `/browse` for this key, so the
-sweep is partitioned by `category_name_bg_lvl1` (16 values, largest ~580).
+ebag.bg renders entirely client-side, so its pages return an empty shell. The
+catalogue behind it is **Algolia** (app `JMJMDQ9HHX`, index `products`); the
+public search key is read from the site's own JS bundle, the same one the
+browser uses.
 
-## Layout
+Four things about that index cost real debugging, and are what the code is
+shaped around:
 
-    schema.sql    offer schema (Neon / Postgres)
-    collect.py    sweep + normalise -> data/
-    data/
-      snapshots/YYYY-MM-DD.jsonl.gz   raw Algolia records, append-only (~185 KB/day)
-      current.json                    normalised rows, overwritten each run
+**Keyword search is the wrong collection tool.** Algolia is typo-tolerant and
+relevance-ranked, so `олио` returns tanning oil, hair serum and stretch-mark
+cream above the cooking oil. The sweep takes the whole catalogue and all
+filtering happens locally against it.
 
-Raw snapshots stay **out of Postgres**. They are the audit trail and the source
-for any later backfill, but at ~1 700 records a day they would dominate a small
-database while being read approximately never.
+**`nbHits` is an estimate.** Without facets it reports ~22 450 against a true
+20 703 (`exhaustiveNbHits: false`). Any completeness check must request a facet.
 
-## Run
+**Paging caps at 1000 and `/browse` is refused**, so the catalogue is
+partitioned. Partitioning by category leaves holes — some products carry no
+lvl3 category, and the index silently ignores a `NOT attr:*` filter, so there
+is no way to ask for them. `ebag_api` bisects on the numeric id instead, which
+is exhaustive by construction and verifies its own total.
 
-    python collect.py
-    python collect.py --out /tmp/ebag --date 2026-08-30
+**Not all offers are in `is_promo`.** Multipacks ("6 x 400 г") are separate
+products flagged `is_save_money`, disjoint from `is_promo`, carrying no
+`discount_percent`. This is ebag's 2-for-1 equivalent, and the saving is only
+visible by comparing against the pack the product bundles up from — which is
+often *itself* a multipack. A 36 x 85 г box of cat food points at the 12 x 85 г
+box, not at one pouch; dividing by 36 produced a bogus 95% saving before both
+sides were reduced to a per-unit price.
 
-## Currency — read this before joining to the brochure tables
+## Currency
 
-**Every monetary column is EUR.** ebag publishes both, but its `base_unit_price`
-is EUR-denominated while `current_price` is лв, and mixing them silently breaks
-every per-kg comparison by a factor of ~1.96. Measured on 298 sampled promo
+`current_price` is лв, `base_unit_price` is EUR. Measured on 298 sampled promo
 products: 298/298 agree with EUR ÷ pack weight, 0/298 with лв ÷ pack weight.
+Mixing them breaks every per-kg comparison by a factor of ~1.96.
 
-The collector therefore stores `price_eur` / `current_price_eur` throughout.
-If the existing brochure tables are in лв, convert at 1.95583 on the join.
+Everything here uses the `*_eur` fields, which is also what `deals` already
+holds — brochure rows have 1 л fresh milk at 1.14 and 400 г yogurt at
+0.49–0.65. No conversion on the join.
 
-## Schema notes
+## The watch list
 
-18 columns, all of them displayed, filtered on, or needed to judge an offer.
-Dropped after checking fill rates against live data:
+`rules.py`, with the thresholds: watch-list items count at **≥15%**, anything at
+all counts at **≥40%**, and a watch-list item at **≥30%** earns an email.
 
-| field | why |
-|---|---|
-| `bundle_discount_data` | 0% populated |
-| `units_in_pack` | 2% populated |
-| EUR/лв duplicate columns | one currency only (above) |
-| `product_code` | ebag-internal, not an EAN — useless for cross-retailer matching |
-| `available_quantity`, `country_of_origin`, `times_sold_1m` | not needed to decide on a deal |
+Every rule leads with a category scope, because ebag's category tree is curated
+and exact while its names are not. `телешко` matched on names alone returns 159
+products, 21 of them dog food and 22 baby puree; scoped to Месо и риба it
+returns beef. Rule terms match **name and brand only** — including the category
+path made the `нахут` rule match "Био Леща Bioitalia Консерва", because the
+category it sits in is named for chickpeas.
 
-`base_unit_price` (EUR per кг/л/бр) is the cross-retailer comparison key —
-brochure pack sizes never line up, so headline prices are not comparable.
-Null for 388 rows, all in `Аптека`, where per-piece pricing applies.
+Notes on individual items:
 
-`expiry_date` is the best-before of the batch actually in stock, populated for
-1 163 of 1 692 (69%). It is not decoration: 35 current promos expire within 30
-days, and they are mostly fresh meat and fish at 10–18% off. That is a distinct
-kind of deal — worth its own rule, and worth excluding from others.
+- **Rummo is not stocked.** Zero products in the whole catalogue. The rule is
+  kept so it fires if ebag ever lists it.
+- **Rabbit** has no fresh category; it exists only jarred and frozen sous-vide.
+  Pate, terrine, liver and bouillon are excluded as not being meat.
+- **Veal** — ebag files телешко and говеждо in one category, so beef comes with it.
+- **Dark chocolate** — only 28 of 65 state the cocoa share in the name. For the
+  rest the description is fetched and parsed; where neither states it the product
+  is excluded rather than guessed, so 50% bars cannot slip through an ≥80% rule.
+- **Free-range eggs** include the `Пасищно отглеждане` category as well.
+- **Chicken** is the one item where "от ферма" was specified, so it requires
+  ebag's `is_farm_product` flag.
 
-Bulgarian has no Postgres stemmer, so `search_text` is indexed twice:
-`to_tsvector('simple', …)` for exact tokens and `pg_trgm` for inflection
-(мляко / млека / млякото). `unaccent` is not used — Bulgarian Cyrillic has no
-diacritics worth folding. The EN name and brand are folded into `search_text`
-rather than stored as columns, because brands appear in both scripts
-(Верея / Vereia).
+## Writing into `deals`
 
-## Judging an offer
+`load.py` maps onto the existing conventions: `store='ebag'`, category onto the
+app's 17 slugs, `package_value`/`package_unit` in g / ml / item, and
+`normalized_product` in the same casefolded, size-stripped shape the brochure
+rows use — which is what lets ebag rows join `price_baselines`. 20 of them do
+today.
 
-`discount_percent` is arithmetically honest — checked against
-`(price_regular - current_price) / price_regular` across all 1 692 current
-promos, none disagreed by more than a percentage point, and none was
-promo-flagged without a real reduction. What it cannot tell you is whether
-`price_regular` was inflated before the promo began. Only `offer_price_points`
-can, which is why the collector appends one whenever a price moves.
+Each run replaces every `store='ebag'` row, so it is idempotent.
 
-Alerts should rank on, in order:
+Multipack savings have no end date; ebag simply prices the bigger pack lower.
+They get a rolling 7-day `valid_until`, refreshed every run, rather than an
+invented deadline.
 
-1. `base_unit_price` vs the product's own median in `offer_price_points`
-2. `base_unit_price` percentile among its category peers
-3. `discount_percent`, as a tie-breaker only
+One caveat for the app: unlike the brochure stores, which store everything,
+ebag rows are already filtered to what clears a threshold. Any per-store average
+discount will look higher for ebag as a result.
 
-Note `category_path` starting with `Био` is an attribute bucket, not a food
-category — it contains cosmetics and hygiene. The current top "food" discount by
-that filter is hypoallergenic tampons. Scope rules on real food categories.
+## Alerts
 
-## Not done yet
-
-- Neon project + `psql -f schema.sql`
-- upsert step (`current.json` -> `offers` + `offer_price_points`)
-- `deal_rules` rows — waiting on the actual criteria
-- alerting + Gmail delivery, deduped via `offer_alerts (rule, product, promo window)`
-- scheduled cloud routine to run the above daily
+`ebag_alerts` (schema.sql) keys on rule + product + promo window, so a
+four-week promo emails once rather than 28 times. The row is written only after
+the mail is accepted, so a broken SMTP config does not silently burn the one
+notification an offer gets.
