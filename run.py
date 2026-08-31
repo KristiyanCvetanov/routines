@@ -78,7 +78,7 @@ def find_offers(hits):
         if discount <= 0:
             continue
         watchlist = match.match_watchlist(hit, descriptions)
-        if not match.qualifies(discount, watchlist):
+        if not match.qualifies(discount, watchlist, match.blocked(hit)):
             continue
         offers.append({"hit": hit, "discount": discount, "kind": kind,
                        "reference": reference, "watchlist": watchlist})

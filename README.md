@@ -77,6 +77,37 @@ Notes on individual items:
 - **Free-range eggs** include the `Пасищно отглеждане` category as well.
 - **Chicken** is the one item where "от ферма" was specified, so it requires
   ebag's `is_farm_product` flag.
+- **Nuts and seeds** — flax, hemp, raw almond / cashew / walnut, and pistachio
+  raw or roasted. The "nut, not a product made from it" part is carried by
+  scope alone: ebag files "Ядки в шоколад", "Плодове в шоколад" and the nut
+  butters as *siblings* of "Сурови ядки", so a leaf scope excludes them without
+  a single exclude term. The blended leaves are left out on the same logic — a
+  nut mix is a product containing nuts. `орех` needs one exclusion even so,
+  being also how Bulgarian names the brazil nut.
+
+## The blacklist
+
+The general ≥40% rule is indiscriminate by design, and dredged up 42% off
+кренвирши, 88 household and cosmetics rows out of 161, and the whole Аптека
+supplement aisle. `BLOCKED_SCOPE` mutes branches of the tree, `BLOCKED_BRANDS`
+mutes the weekly-promo detergent brands. Together they take a run from 161
+offers to 46.
+
+Both apply to the general rule **only**. A watch-list rule outranks them:
+asking for a product by name is a stronger signal than the category it happens
+to sit in, and `заешко месо` deliberately scopes into Замразени храни because
+ebag sells no fresh rabbit — a blanket frozen block would have silently killed
+that rule.
+
+Two details worth keeping:
+
+- **Beer, wine and spirits live under Напитки**, alongside the juice and fizzy
+  drinks that are the actual noise. `BLOCK_EXCEPT` lists the five alcohol
+  subtrees rather than the nine blocked siblings, so a soft-drink category ebag
+  adds later is muted by default instead of leaking through.
+- **Brands match the brand field, never the name.** "finish" in a name also
+  catches Bushmills "Rum Cask Finish" whisky and a Wilkinson "Perfect Finish"
+  tweezer; `brand_name_en` is exact where the name is not.
 
 ## Writing into `deals`
 

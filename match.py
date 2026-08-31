@@ -203,8 +203,31 @@ def needs_description(hit):
     return False
 
 
-def qualifies(discount, watchlist):
-    """Is this an offer worth storing, per the configured thresholds?"""
+def blocked(hit, path=None):
+    """Is this product in a branch or brand muted for the general rule?
+
+    Category prefixes match at a path boundary, so "Напитки" mutes the drinks
+    tree without also matching "Напитки и ..." should ebag ever add one. Brands
+    match the brand field exactly -- see R.BLOCKED_BRANDS for why not the name.
+    """
+    path = category_path(hit) if path is None else path
+    brands = {str(hit.get("brand_name_bg") or "").lower(),
+              str(hit.get("brand_name_en") or "").lower()}
+    if brands & set(R.BLOCKED_BRANDS):
+        return True
+    for prefix in R.BLOCK_EXCEPT:
+        if path == prefix or path.startswith(prefix + " > "):
+            return False
+    return any(path == prefix or path.startswith(prefix + " > ")
+               for prefix in R.BLOCKED_SCOPE)
+
+
+def qualifies(discount, watchlist, is_blocked=False):
+    """Is this an offer worth storing, per the configured thresholds?
+
+    A watch-list rule outranks the blacklist: asking for a product by name is a
+    stronger signal than the category it happens to sit in.
+    """
     if watchlist and discount >= R.WATCHLIST_MIN_DISCOUNT:
         return True
-    return discount >= R.GENERAL_MIN_DISCOUNT
+    return not is_blocked and discount >= R.GENERAL_MIN_DISCOUNT
