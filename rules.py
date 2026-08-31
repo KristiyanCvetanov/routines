@@ -195,6 +195,17 @@ RULES = [
     # The Био tree repeats the assortment under its own shallower leaves, which
     # do not name the nut, so each rule reaches it through `alt` on terms.
     {
+        "name": "псилиум",
+        # No scope: ebag scatters it across pantry supplements and the Аптека
+        # constipation aisle, and unlike 'телешко' the word is unambiguous.
+        # The Аптека copy arrives only because a watch-list rule outranks
+        # BLOCKED_SCOPE. Capsules are a supplement, not husk; and живовляк --
+        # the plant's Bulgarian name -- is deliberately not a term, since it
+        # matches a propolis throat spray that merely contains the leaf.
+        "terms": ["псилиум", "psyllium"],
+        "exclude_terms": ["капсул", "таблет", "спрей"],
+    },
+    {
         "name": "ленено семе",
         "scope": ["%s > Ленено семе" % SEEDS],
         "alt": {"scope": [BIO_SEEDS], "terms": ["ленен", "ленено", "flax"]},

@@ -77,6 +77,12 @@ Notes on individual items:
 - **Free-range eggs** include the `Пасищно отглеждане` category as well.
 - **Chicken** is the one item where "от ферма" was specified, so it requires
   ebag's `is_farm_product` flag.
+- **Psyllium husk** is the one rule with no category scope: ebag files it both
+  as a pantry supplement and in the Аптека constipation aisle, and unlike
+  `телешко` the word is unambiguous. The Аптека copy arrives only because a
+  watch-list rule outranks the blacklist. Capsules are excluded as a supplement
+  rather than husk, and `живовляк` — the plant's Bulgarian name — is
+  deliberately not a term, matching only a throat spray containing the leaf.
 - **Nuts and seeds** — flax, hemp, raw almond / cashew / walnut, and pistachio
   raw or roasted. The "nut, not a product made from it" part is carried by
   scope alone: ebag files "Ядки в шоколад", "Плодове в шоколад" and the nut
