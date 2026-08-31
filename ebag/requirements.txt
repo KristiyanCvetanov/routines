@@ -1,0 +1,2 @@
+# The only third-party dependency: ebag_api and notify use urllib from stdlib.
+psycopg[binary]==3.2.3
