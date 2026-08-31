@@ -1,38 +1,27 @@
 # -*- coding: utf-8 -*-
 """Email for watch-list offers that clear the alert threshold.
 
-Sent over SMTP rather than through a Claude connector: the cloud routine can
-only attach connectors the account has authorised, and Gmail is not among them
-today, while SMTP works from any environment that has the credentials.
+Sent through Resend's HTTP API rather than a Claude connector: a cloud routine
+can only attach connectors the account has authorised, and Gmail is not among
+them. An HTTP call needs nothing but the key.
 
 Configuration, all from the environment:
 
-    SMTP_HOST      default smtp.gmail.com
-    SMTP_PORT      default 587 (STARTTLS)
-    SMTP_USER      the sending account
-    SMTP_PASSWORD  a Gmail app password, NOT the account password
-    ALERT_TO       recipient; defaults to SMTP_USER
+    RESEND_API_KEY   required; without it send() reports and returns False
+    ALERT_TO         recipient
+    ALERT_FROM       sender, default onboarding@resend.dev
 
-With none of these set, send() reports what it would have sent and returns
-False, so a run never fails just because mail is unconfigured.
+Resend only accepts a `from` on a domain you have verified. Until a domain is
+added, `onboarding@resend.dev` is the one usable sender and it can only deliver
+to the address that owns the Resend account.
 """
-import email.message
+import json
 import os
-import smtplib
+import urllib.error
+import urllib.request
 
-
-def _config():
-    user = os.environ.get("SMTP_USER")
-    password = os.environ.get("SMTP_PASSWORD")
-    if not user or not password:
-        return None
-    return {
-        "host": os.environ.get("SMTP_HOST", "smtp.gmail.com"),
-        "port": int(os.environ.get("SMTP_PORT", "587")),
-        "user": user,
-        "password": password,
-        "to": os.environ.get("ALERT_TO", user),
-    }
+ENDPOINT = "https://api.resend.com/emails"
+DEFAULT_FROM = "onboarding@resend.dev"
 
 
 def render(alerts):
@@ -49,9 +38,9 @@ def render(alerts):
                                         (", " + pack) if pack else ""))
         lines.append("        %.2f EUR  (%s, %s)"
                      % (hit["current_price_eur"], kind, rule))
-        until = hit.get("promo_period")
-        if until:
-            lines.append("        промо период: %s" % until)
+        period = hit.get("promo_period")
+        if period:
+            lines.append("        промо период: %s" % period)
         slug = hit.get("url_slug_bg")
         if slug:
             lines.append("        https://www.ebag.bg/%s/%s" % (slug, hit["id"]))
@@ -60,25 +49,41 @@ def render(alerts):
     return subject, "\n".join(lines)
 
 
+def deliver(subject, body, to=None):
+    """Post one message. Returns True when Resend accepted it."""
+    key = os.environ.get("RESEND_API_KEY")
+    recipient = to or os.environ.get("ALERT_TO")
+    if not key or not recipient:
+        print("RESEND_API_KEY / ALERT_TO not set; would have sent:\n%s\n\n%s"
+              % (subject, body))
+        return False
+
+    payload = json.dumps({
+        "from": os.environ.get("ALERT_FROM", DEFAULT_FROM),
+        "to": [recipient],
+        "subject": subject,
+        "text": body,
+    }).encode()
+    request = urllib.request.Request(
+        ENDPOINT, data=payload,
+        headers={"Authorization": "Bearer %s" % key,
+                 "Content-Type": "application/json",
+                 # Resend sits behind Cloudflare, which answers the default
+                 # Python-urllib agent with 403 / error code 1010.
+                 "User-Agent": "grocery-deal-ebag/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.load(response)
+        print("emailed %s (resend id %s)" % (recipient, result.get("id")))
+        return True
+    except urllib.error.HTTPError as exc:
+        print("resend refused (%s): %s" % (exc.code, exc.read().decode()[:300]))
+        return False
+
+
 def send(alerts):
     """True when a message actually went out."""
     if not alerts:
         return False
     subject, body = render(alerts)
-    config = _config()
-    if not config:
-        print("SMTP not configured; would have sent:\n%s\n%s" % (subject, body))
-        return False
-
-    message = email.message.EmailMessage()
-    message["Subject"] = subject
-    message["From"] = config["user"]
-    message["To"] = config["to"]
-    message.set_content(body)
-
-    with smtplib.SMTP(config["host"], config["port"], timeout=30) as server:
-        server.starttls()
-        server.login(config["user"], config["password"])
-        server.send_message(message)
-    print("emailed %d alerts to %s" % (len(alerts), config["to"]))
-    return True
+    return deliver(subject, body)

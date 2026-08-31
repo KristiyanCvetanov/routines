@@ -8,7 +8,7 @@ the Lidl / Billa / Metro / Fantastiko brochures already populate.
     python run.py --cached     # reuse data/catalogue.jsonl.gz, for tuning rules
 
 Configuration is all environment: `DATABASE_URL` (falls back to a local `.env`),
-and `SMTP_USER` / `SMTP_PASSWORD` / `ALERT_TO` for mail.
+and `RESEND_API_KEY` / `ALERT_TO` for mail, with an optional `ALERT_FROM`.
 
 ## What the site actually exposes
 
