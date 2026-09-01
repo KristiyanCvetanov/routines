@@ -92,13 +92,28 @@ def _collect(lo, hi, out, on_page):
             return
 
 
+# The sweep takes minutes and ebag edits the catalogue underneath it: a product
+# listed when its id range was paged can be gone by the time the check runs.
+# Counting on both sides of the sweep brackets that churn.
+#
+# The check is here to catch a partitioning hole, and a hole drops a whole paged
+# range -- up to 1000 products -- so 50 is loose enough for a night's churn (the
+# run that provoked this was 3 over) and still far tighter than anything that
+# could go wrong unnoticed.
+COUNT_SLACK = 50
+
+
 def sweep_catalogue(progress=None):
     """Every product in the index, keyed by id."""
+    before = exact_count()
     out = {}
     _collect(0, 10 ** 9, out, progress)
-    expected = exact_count()
-    if len(out) != expected:
-        raise RuntimeError("swept %d of %d products" % (len(out), expected))
+    after = exact_count()
+    lo = min(before, after) - COUNT_SLACK
+    hi = max(before, after) + COUNT_SLACK
+    if not lo <= len(out) <= hi:
+        raise RuntimeError("swept %d products, expected %d-%d"
+                           % (len(out), lo, hi))
     return out
 
 
