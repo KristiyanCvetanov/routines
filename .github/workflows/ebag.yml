@@ -1,7 +1,8 @@
 name: ebag offers
 
 # Daily sweep of ebag.bg: score every product, replace the store's rows in
-# `deals`, and email watch-list offers that clear the alert threshold.
+# `deals`, and push watch-list offers that clear the alert threshold as a
+# notification through the grocery-deal app.
 #
 # 05:30 UTC is 08:30 in Sofia. GitHub runs cron on UTC and does not shift for
 # daylight saving, so this drifts an hour in winter -- which does not matter
@@ -13,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run: score and report only, no database write, no email"
+        description: "Dry run: score and report only, no database write, no notification"
         type: boolean
         default: false
 
@@ -43,6 +44,9 @@ jobs:
       - name: Sweep, score and load
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          ALERT_TO: ${{ secrets.ALERT_TO }}
+          # The grocery-deal app's /api/push/ebag, and the shared secret its
+          # pipeline-facing endpoints authenticate with. Unset, the run still
+          # sweeps and loads; it prints the notification instead of sending it.
+          EBAG_PUSH_URL: ${{ secrets.EBAG_PUSH_URL }}
+          PUSH_DISPATCH_SECRET: ${{ secrets.PUSH_DISPATCH_SECRET }}
         run: python run.py ${{ inputs.dry_run && '--dry-run' || '' }}

@@ -95,6 +95,17 @@ def package(pack_text):
     return round(total, 3), unit
 
 
+def display(hit):
+    """What goes in `deals.product`: the name, with its pack size.
+
+    Shared with notify, which needs the same string to look a written row's id
+    back up for the notification's deep link.
+    """
+    name = hit.get("name_bg") or ""
+    pack = hit.get("unit_weight_text_value_bg")
+    return "%s, %s" % (name, pack) if pack else name
+
+
 def to_deal(hit, discount, kind, reference, run_date, path=None):
     """One `deals` row."""
     path = match.category_path(hit) if path is None else path
@@ -115,10 +126,9 @@ def to_deal(hit, discount, kind, reference, run_date, path=None):
         promo_from, promo_to = run_date, run_date + _WEEK
 
     value, unit = package(pack)
-    display = "%s, %s" % (name, pack) if pack else name
     return {
         "store": STORE,
-        "product": display,
+        "product": display(hit),
         "normalized_product": normalized_product(name),
         "price": price,
         "old_price": old_price,

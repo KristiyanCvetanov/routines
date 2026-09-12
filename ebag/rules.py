@@ -31,7 +31,7 @@ casefolded. Bulgarian Cyrillic has no diacritics to fold.
 # Thresholds are global, not per-rule.
 WATCHLIST_MIN_DISCOUNT = 15    # a watch-list item counts as an offer at >= this
 GENERAL_MIN_DISCOUNT = 40      # anything at all counts as an offer at >= this
-WATCHLIST_EMAIL_DISCOUNT = 30  # a watch-list item earns an email at >= this
+WATCHLIST_ALERT_DISCOUNT = 30  # a watch-list item earns a notification at >= this
 
 MEAT = "Месо и риба"
 DAIRY = "Млечни и яйца"
