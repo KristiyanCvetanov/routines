@@ -87,7 +87,7 @@ def find_offers(hits):
 
 
 def promo_key(offer):
-    """Identifies one promo window, so an email fires once per window."""
+    """Identifies one promo window, so an alert fires once per window."""
     if offer["kind"] == "promo":
         period = offer["hit"].get("promo_period")
         if period:
@@ -96,10 +96,10 @@ def promo_key(offer):
 
 
 def pending_alerts(offers, cur):
-    """Watch-list offers over the email threshold not yet alerted this window."""
+    """Watch-list offers over the alert threshold not yet alerted this window."""
     out = []
     for offer in offers:
-        if not offer["watchlist"] or offer["discount"] < R.WATCHLIST_EMAIL_DISCOUNT:
+        if not offer["watchlist"] or offer["discount"] < R.WATCHLIST_ALERT_DISCOUNT:
             continue
         for rule in offer["watchlist"]:
             cur.execute(
@@ -112,11 +112,23 @@ def pending_alerts(offers, cur):
     return out
 
 
-def write(offers, run_date, conn):
-    """Replace this store's rows, then email and record any new alerts.
+def deal_ids(cur):
+    """`deals.product` -> row id, for the rows this run has just written.
 
-    The alert is recorded only after the mail is actually accepted, so a broken
-    SMTP config does not silently burn the one notification this offer gets.
+    Read inside the writing transaction, so it sees the insert above. It gives
+    the notification somewhere to land; two offers sharing a display name would
+    collapse onto one id, which costs a deep link and nothing else.
+    """
+    cur.execute("SELECT product, id FROM deals WHERE store = %s", (load.STORE,))
+    return dict(cur.fetchall())
+
+
+def write(offers, run_date, conn):
+    """Replace this store's rows, then notify and record any new alerts.
+
+    The alert is recorded only after the app has accepted the notification, so
+    an unreachable app does not silently burn the one notification this offer
+    gets -- the next run announces it again.
     """
     rows = [load.to_deal(o["hit"], o["discount"], o["kind"], o["reference"], run_date)
             for o in offers]
@@ -133,9 +145,10 @@ def write(offers, run_date, conn):
                    %(package_value)s, %(package_unit)s, now())""", rows)
 
         fresh = pending_alerts(offers, cur)
+        ids = deal_ids(cur) if fresh else {}
     conn.commit()
 
-    if fresh and notify.send(fresh):
+    if fresh and notify.send(fresh, ids):
         with conn.cursor() as cur:
             cur.executemany(
                 """INSERT INTO ebag_alerts
@@ -151,10 +164,10 @@ def report(offers, fresh):
     listed = [o for o in offers if o["watchlist"]]
     print("offers            : %d  (watch list %d, general %d)"
           % (len(offers), len(listed), len(offers) - len(listed)))
-    print("new email alerts  : %d" % len(fresh))
+    print("new notifications : %d" % len(fresh))
     print("\nwatch list:")
     for o in listed:
-        flag = "*" if o["discount"] >= R.WATCHLIST_EMAIL_DISCOUNT else " "
+        flag = "*" if o["discount"] >= R.WATCHLIST_ALERT_DISCOUNT else " "
         print("  %s -%2d%% %-9s %-46s %6.2f EUR  [%s]"
               % (flag, o["discount"], o["kind"], o["hit"]["name_bg"][:46],
                  o["hit"]["current_price_eur"], o["watchlist"][0][:24]))

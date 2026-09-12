@@ -3,12 +3,12 @@
 Feeds ebag.bg offers into the grocery-deal database, into the same `deals` table
 the Lidl / Billa / Metro / Fantastiko brochures already populate.
 
-    python run.py              # sweep, score, write to deals, email new alerts
+    python run.py              # sweep, score, write to deals, notify new alerts
     python run.py --dry-run    # no writes
     python run.py --cached     # reuse data/catalogue.jsonl.gz, for tuning rules
 
 Configuration is all environment: `DATABASE_URL` (falls back to a local `.env`),
-and `RESEND_API_KEY` / `ALERT_TO` for mail, with an optional `ALERT_FROM`.
+and `EBAG_PUSH_URL` / `PUSH_DISPATCH_SECRET` for the notification.
 
 ## What the site actually exposes
 
@@ -55,7 +55,7 @@ holds — brochure rows have 1 л fresh milk at 1.14 and 400 г yogurt at
 ## The watch list
 
 `rules.py`, with the thresholds: watch-list items count at **≥15%**, anything at
-all counts at **≥40%**, and a watch-list item at **≥30%** earns an email.
+all counts at **≥40%**, and a watch-list item at **≥30%** earns a notification.
 
 Every rule leads with a category scope, because ebag's category tree is curated
 and exact while its names are not. `телешко` matched on names alone returns 159
@@ -135,7 +135,32 @@ discount will look higher for ebag as a result.
 
 ## Alerts
 
-`ebag_alerts` (schema.sql) keys on rule + product + promo window, so a
-four-week promo emails once rather than 28 times. The row is written only after
-the mail is accepted, so a broken SMTP config does not silently burn the one
-notification an offer gets.
+A watch-list offer over the threshold is a **push notification**, sent by the
+grocery-deal app rather than from here: `notify.py` posts the offers to its
+`/api/push/ebag`, and the app renders the message, sends it to the subscribed
+devices and keeps it in its own notification list. This used to be an email
+through Resend. The app already owned the device subscriptions and the VAPID
+keys, so the alert now arrives on the phone that does the shopping, and stays
+readable in the app afterwards.
+
+What crosses the boundary is offers, not wording -- rule, product, discount,
+price and the `deals.id` of the row this run wrote. The app renders them in the
+reader's language, and a tap lands on that deal's row. Which means a
+notification carries less than the email did: three products rather than all of
+them, and no promo period or per-offer link, because that is what fits on a lock
+screen. The rest is one tap away.
+
+The deep link is good for the day it is sent. Every run replaces this store's
+rows, so tomorrow's sweep gives the same offer a new `deals.id` and yesterday's
+link no longer names a row -- the app opens the deals page and highlights
+nothing, which is the right way for it to fail. Notifications are acted on the
+day they arrive, so this is not worth an external key on `deals`.
+
+`ebag_alerts` (schema.sql) keys on rule + product + promo window, so a four-week
+promo notifies once rather than 28 times. The row is written only after the app
+has accepted the notification, so an unreachable app does not silently burn the
+one notification an offer gets -- the next run announces it again.
+
+A reply of `delivered: 0` is not a failure: the app records the notification
+whether or not a device receives it, which is what separates a broken push
+configuration from a quiet week.
