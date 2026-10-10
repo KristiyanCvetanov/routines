@@ -68,6 +68,8 @@ Notes on individual items:
 
 - **Rummo is not stocked.** Zero products in the whole catalogue. The rule is
   kept so it fires if ebag ever lists it.
+- **Flour** is watched by brand, inside the flour aisle only. Евамел, Балван and
+  Земята на траките are not stocked. Their rules wait like the Rummo one.
 - **Rabbit** has no fresh category; it exists only jarred and frozen sous-vide.
   Pate, terrine, liver and bouillon are excluded as not being meat.
 - **Veal** — ebag files телешко and говеждо in one category, so beef comes with it.
