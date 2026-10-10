@@ -40,6 +40,8 @@ BIO_DAIRY = "Био > Био млечни продукти"
 SWEETS = "Сладко и солено > Шоколад и шоколадови изделия"
 CANNED_VEG = "%s > Консервирани зеленчуци" % STAPLES
 BIO_STAPLES = "Био > Био основни храни"
+FLOUR = "%s > Брашно, сол и панировки" % STAPLES
+BIO_FLOUR = "%s > Био брашно" % BIO_STAPLES
 NUTS = "Сладко и солено > Ядки и семена"
 RAW_NUTS = "%s > Сурови ядки" % NUTS
 ROASTED_NUTS = "%s > Печени ядки" % NUTS
@@ -166,6 +168,38 @@ RULES = [
         "name": "паста Rummo",
         # ebag carries none today; kept so the rule fires if it ever stocks it.
         "terms": ["rummo"],
+    },
+
+    # Flour, by brand. Scoped to the flour aisle so a brand's other products
+    # stay out of it. Евамел, Балван and Земята на траките are not stocked
+    # today; like Rummo, their rules wait for ebag to list them, and their
+    # Latin spellings are a guess until it does.
+    {
+        "name": "брашно Евамел",
+        "scope": [FLOUR, BIO_FLOUR],
+        "terms": ["евамел", "evamel"],
+    },
+    {
+        "name": "брашно Балван",
+        "scope": [FLOUR, BIO_FLOUR],
+        "terms": ["балван", "balvan"],
+    },
+    {
+        "name": "брашно Земята на траките",
+        "scope": [FLOUR, BIO_FLOUR],
+        "terms": ["земята на траките", "zemyata na trakite"],
+    },
+    {
+        "name": "брашно Caputo",
+        "scope": [FLOUR, BIO_FLOUR],
+        "terms": ["caputo"],
+    },
+    {
+        "name": "брашно La Manitoba",
+        # A product line of Agugiaro&Figna, so the name carries it, not the
+        # brand field.
+        "scope": [FLOUR, BIO_FLOUR],
+        "terms": ["la manitoba"],
     },
     {
         "name": "леща кафява и червена",
