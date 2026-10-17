@@ -15,6 +15,7 @@ import re
 import match
 
 _WEEK = dt.timedelta(days=7)
+_MULTIPACK = dt.timedelta(days=90)
 
 STORE = "ebag"
 
@@ -106,8 +107,17 @@ def display(hit):
     return "%s, %s" % (name, pack) if pack else name
 
 
-def to_deal(hit, discount, kind, reference, run_date, path=None):
-    """One `deals` row."""
+def window_key(product, price):
+    """What identifies a multipack window between runs: same row, same price."""
+    return product, None if price is None else round(float(price), 2)
+
+
+def to_deal(hit, discount, kind, reference, run_date, path=None, windows=None):
+    """One `deals` row.
+
+    `windows` maps window_key -> (valid_from, valid_until) from the rows the
+    previous run wrote.
+    """
     path = match.category_path(hit) if path is None else path
     name = hit.get("name_bg") or ""
     pack = hit.get("unit_weight_text_value_bg")
@@ -118,12 +128,18 @@ def to_deal(hit, discount, kind, reference, run_date, path=None):
         promo_from, promo_to = match.parse_period(hit.get("promo_period"))
     else:
         # A multipack saving has no end date -- ebag simply prices the bigger
-        # pack lower per unit. Rolling 7-day window, refreshed on every run, so
-        # the app's valid_until filter keeps showing it without inventing a
-        # deadline. `old_price` is what the same quantity costs at the
-        # reference pack's unit rate.
+        # pack lower per unit. The window is kept from the previous run while
+        # product and price are unchanged, because the app identifies an offer
+        # by store, product, price and dates: a window that moved every day
+        # re-announced the same offer every day. A new offer, or a new price,
+        # gets a fresh 90-day window, long enough not to roll over while the
+        # offer lasts. The end date never removes the row -- every run replaces
+        # this store's rows, so an offer ebag drops is gone the next day.
+        # `old_price` is what the same quantity costs at the reference pack's
+        # unit rate.
         old_price = round(price / (1 - discount / 100.0), 2) if discount else None
-        promo_from, promo_to = run_date, run_date + _WEEK
+        kept = (windows or {}).get(window_key(display(hit), price))
+        promo_from, promo_to = kept or (run_date, run_date + _MULTIPACK)
 
     value, unit = package(pack)
     return {

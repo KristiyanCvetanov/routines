@@ -128,8 +128,12 @@ today.
 Each run replaces every `store='ebag'` row, so it is idempotent.
 
 Multipack savings have no end date; ebag simply prices the bigger pack lower.
-They get a rolling 7-day `valid_until`, refreshed every run, rather than an
-invented deadline.
+A new one gets a 90-day window from the day it is first seen. Later runs keep
+that window while product and price stay the same. The app identifies an offer
+by store, product, price and dates, so a window that moved every run made the
+app announce the same multipack again every day. A price change gets a new
+window, and so a new notification. The end date never removes a row: every
+run replaces this store's rows, so an offer ebag drops is gone the next day.
 
 One caveat for the app: unlike the brochure stores, which store everything,
 ebag rows are already filtered to what clears a threshold. Any per-store average
