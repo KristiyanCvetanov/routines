@@ -123,6 +123,18 @@ def deal_ids(cur):
     return dict(cur.fetchall())
 
 
+def previous_windows(cur):
+    """The validity window of each row the previous run wrote.
+
+    Read before the rows are replaced, so a multipack that is still on offer
+    at the same price keeps its dates and does not look new to the app.
+    """
+    cur.execute("""SELECT product, price, valid_from, valid_until
+                   FROM deals WHERE store = %s""", (load.STORE,))
+    return {load.window_key(product, price): (valid_from, valid_until)
+            for product, price, valid_from, valid_until in cur.fetchall()}
+
+
 def write(offers, run_date, conn):
     """Replace this store's rows, then notify and record any new alerts.
 
@@ -130,9 +142,11 @@ def write(offers, run_date, conn):
     an unreachable app does not silently burn the one notification this offer
     gets -- the next run announces it again.
     """
-    rows = [load.to_deal(o["hit"], o["discount"], o["kind"], o["reference"], run_date)
-            for o in offers]
     with conn.cursor() as cur:
+        windows = previous_windows(cur)
+        rows = [load.to_deal(o["hit"], o["discount"], o["kind"], o["reference"],
+                             run_date, windows=windows)
+                for o in offers]
         cur.execute("DELETE FROM deals WHERE store = %s", (load.STORE,))
         cur.executemany(
             """INSERT INTO deals (store, product, normalized_product, price,
