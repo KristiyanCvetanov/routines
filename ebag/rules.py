@@ -218,6 +218,21 @@ RULES = [
         "scope": ["%s > Черен шоколад" % SWEETS, "%s > Шоколад без захар" % SWEETS],
         "cocoa_min": 80,
     },
+    {
+        "name": "шоколадови капки",
+        # Baking drops, filed under Готварски шоколад beside the couverture,
+        # so the name has to say капки. Scoped to the aisle rather than the
+        # leaf: ebag renamed "Захар и сладкарски продукти" to "... съставки"
+        # between September and November. The aisle keeps out what is not a
+        # baking drop -- "Шоколадов чипс Hamlet", a thin snacking crisp in the
+        # sweets aisle, and cookies made "с какаови капки" or "с шоколадов чипс".
+        "scope": [STAPLES, BIO_STAPLES],
+        "terms": ["капки", "drops", "chips"],
+        "all_terms": ["шоколад"],
+        # Dr Oetker's muffin mix "с Парченца Шоколад" reaches 'chips' through
+        # its English name.
+        "exclude_terms": ["смес", "mix"],
+    },
 
     # Nuts and seeds -- the nut itself, never a product made from it. Scope
     # alone carries that: ebag files "Ядки в шоколад", "Плодове в шоколад" and

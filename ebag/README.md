@@ -76,6 +76,12 @@ Notes on individual items:
 - **Dark chocolate** — only 28 of 65 state the cocoa share in the name. For the
   rest the description is fetched and parsed; where neither states it the product
   is excluded rather than guessed, so 50% bars cannot slip through an ≥80% rule.
+- **Chocolate drops** (`шоколадови капки`) — the baking kind, scoped to the
+  staples aisle by name, not to their leaf: ebag renamed the parent category
+  ("сладкарски продукти" → "сладкарски съставки") between September and
+  November, and a leaf scope would have quietly stopped matching. The aisle
+  keeps out Hamlet's "Шоколадов чипс", a snacking crisp, and cookies made with
+  chips. Only Bettr's four are stocked today.
 - **Free-range eggs** include the `Пасищно отглеждане` category as well.
 - **Chicken** is the one item where "от ферма" was specified, so it requires
   ebag's `is_farm_product` flag.
